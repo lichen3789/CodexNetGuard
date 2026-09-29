@@ -1,0 +1,34 @@
+# 运行时在 exe 同目录生成的文件
+CodexNetGuard.ini
+CodexNetGuard-app.log
+CodexNetGuard-app.log.1
+CodexNetGuard-report.txt
+CodexNetGuard-restore.json
+tray.pid
+watch.pid
+state.json
+guard.log
+
+# 本地备份与打包产物
+*.bak-*
+*.bak-2026*
+dist/
+
+# 编译产物（二进制走 Releases）
+*.exe
+*.pdb
+*.ilk
+obj/
+bin/
+
+# 旧版 PowerShell 守护（已被本程序取代，不随仓库发布）与本地配置/快捷方式
+CodexNetGuard.ps1
+Codex CLI(带网络守护).cmd
+config.json
+*.lnk
+
+# 编辑器 / 系统
+.vs/
+.vscode/
+Thumbs.db
+desktop.ini
