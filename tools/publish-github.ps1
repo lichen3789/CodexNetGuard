@@ -34,6 +34,18 @@ $topics = @('windows', 'proxy', 'v2ray', 'v2rayn', 'clash', 'mihomo', 'sing-box'
 function Write-Step([string]$Text) { Write-Host ("== " + $Text) -ForegroundColor Cyan }
 function Invoke-Git([string[]]$GitArgs) { & git.exe @GitArgs; if ($LASTEXITCODE -ne 0) { throw ("git " + ($GitArgs -join ' ') + " 失败") } }
 
+# 统一走 UTF-8 字节发送 JSON：PowerShell 5.1 直接用字符串发中文会变问号
+function Invoke-Api {
+    param([string]$Method, [string]$Uri, $Object)
+    $p = @{ Method = $Method; Uri = $Uri; Headers = $headers }
+    if ($null -ne $Object) {
+        $p['Body'] = [Text.Encoding]::UTF8.GetBytes(($Object | ConvertTo-Json -Depth 5))
+        $p['ContentType'] = 'application/json; charset=utf-8'
+    }
+    if ($Proxy) { $p['Proxy'] = $Proxy }
+    return Invoke-RestMethod @p
+}
+
 $repoFromStore = $false
 if (-not $Token) {
     # 从 git 凭据管理器（git-credential-manager）里取已登录的 token，避免 token 出现在命令行里
@@ -90,10 +102,9 @@ if ($Token) {
     }
     if (-not $exists) {
         $body = @{ name = ($Repo -split '/')[1]; description = $Description; private = [bool]$Private; has_issues = $true; has_wiki = $false; auto_init = $false } | ConvertTo-Json
-        $created = Invoke-RestMethod -Method Post -Uri "$api/user/repos" -Headers $headers -Body $body -ContentType 'application/json' @invokeArgs
+        $created = Invoke-Api 'Post' "$api/user/repos" @{ name = ($Repo -split '/')[1]; description = $Description; private = [bool]$Private; has_issues = $true; has_wiki = $false; auto_init = $false }
         Write-Host ("  已创建：" + $created.full_name + "（public=" + (-not $created.private) + "）")
-        $topicBody = @{ names = $topics } | ConvertTo-Json
-        try { Invoke-RestMethod -Method Put -Uri "$api/repos/$Repo/topics" -Headers $headers -Body $topicBody -ContentType 'application/json' @invokeArgs | Out-Null; Write-Host '  已设置 topics' } catch { Write-Host '  topics 设置失败（不影响发布）' -ForegroundColor Yellow }
+        try { Invoke-Api 'Put' "$api/repos/$Repo/topics" @{ names = $topics } | Out-Null; Write-Host '  已设置 topics' } catch { Write-Host '  topics 设置失败（不影响发布）' -ForegroundColor Yellow }
     }
 } else {
     Write-Host '  未提供 token：跳过自动建仓库，请确保远程仓库已经存在' -ForegroundColor Yellow
@@ -139,9 +150,8 @@ if (-not $Token) {
 Write-Step ("创建 Release v" + $Version)
 $notes = ''
 $changelog = Join-Path $root 'CHANGELOG.md'
-if (Test-Path $changelog) { $notes = (Get-Content -Raw $changelog) }
-$releaseBody = @{ tag_name = "v$Version"; name = "CodexNetGuard v$Version"; body = $notes; draft = $false; prerelease = $false } | ConvertTo-Json
-$release = Invoke-RestMethod -Method Post -Uri "$api/repos/$Repo/releases" -Headers $headers -Body $releaseBody -ContentType 'application/json' @invokeArgs
+if (Test-Path $changelog) { $notes = [IO.File]::ReadAllText($changelog) }
+$release = Invoke-Api 'Post' "$api/repos/$Repo/releases" @{ tag_name = "v$Version"; name = "CodexNetGuard v$Version"; body = $notes; draft = $false; prerelease = $false }
 Write-Host ("  " + $release.html_url)
 
 Write-Step '上传便携包'
